@@ -1,0 +1,67 @@
+version: "3"
+services:
+  iot-mosquitto:
+    image: eclipse-mosquitto
+    ports:
+      - "1883:1883"
+    restart: always
+  
+  iot-app:
+    restart: always
+    build: . # Current directory!
+    command: python3 /code/manage.py runserver 0.0.0.0:8000
+    volumes:
+      - static_volume:/code/static
+      - media_volume:/code/mediafiles
+      - .:/code
+    ports:
+      - 8000:8000
+    depends_on:
+      - db
+
+  iot-websockets:
+    restart: always
+    build: . # Current directory!
+    command: chasgimqtt iot_platform.asgi:channel_layer -H iot-mosquitto -p 1883 --topic irrigation/control/device:1
+
+    volumes:
+      - static_volume:/code/static
+      - media_volume:/code/mediafiles
+      - .:/code
+    ports:
+      - "1884:1884"
+
+  iot-worker:
+    restart: always
+    build: . # Current directory!
+    command: python3 /code/manage.py runworker mqtt
+    volumes:
+      - static_volume:/code/static
+      - media_volume:/code/mediafiles
+      - .:/code
+    ports:
+      - 9000:9000
+
+  redis:
+    restart: always
+    image: "redis:alpine"
+    ports:
+      - "6379:6379"
+    volumes:
+      - ./redis-data:/data
+
+  db:
+    image: postgres:10.1-alpine
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
+    ports:
+      - "5432:5432"
+    restart: always
+    environment:
+      POSTGRES_DB: "iot_default_db"
+      POSTGRES_USER: "postgres"
+      POSTGRES_PASSWORD: "admin123"
+volumes:
+  static_volume:
+  media_volume:
+  postgres_data:
